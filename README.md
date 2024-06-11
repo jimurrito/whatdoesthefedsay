@@ -3,6 +3,8 @@ A simple Rest API that provides the current effective interest rate, as provided
 
 The values for the API are updated as the federal reserve updates.
 
+#### [Github Repo](https://github.com/jimurrito/whatdoesthefedsay)
+
 ## How to use
 
 From either a browser, or a Rest API client like Postman, goto [http://whatdoesthefedsay.com/rate](http://whatdoesthefedsay.com/rate).
@@ -25,7 +27,7 @@ There is no authentication or token needed to access.
 > - Effective rate is not the same as the average interest rate a loan will have. That rate will usually be higher.
 
 ## Any issues?
-Open an issue on this repo!
+Open an issue on this [repo](https://github.com/jimurrito/whatdoesthefedsay)!
 
 # How I built this API for (almost) free
 To build this API, I used a combination of Powershell, the Github Rest API, Github Pages.
@@ -34,7 +36,7 @@ To build this API, I used a combination of Powershell, the Github Rest API, Gith
 
 1. Pulls the current current interest rate from the fed.
 2. Parses HTML for the required values.
-3. Used the Github API to create a branch on top of the Main branch to this repo.
+3. Used the Github API to create a branch on top of the Main branch to this [repo](https://github.com/jimurrito/whatdoesthefedsay).
 4. Pushes the new rate into the [rate.html](rate.html) file.
 
 This script runs as a cronjob using Powershell Core. However, it could also be ran from an Azure Function for the same cost. **Just so long as you keep it under 1,000,000 runs per month.**
