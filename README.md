@@ -1,11 +1,11 @@
 # What Does the Fed(eral Reserve) say?
-A simple Rest API that provides the current effective interest rate, as provided by the federal reserve here: https://www.federalreserve.gov/releases/h15/
+A simple Rest API that provides the current effective interest rate, as provided by the federal reserve here: [https://www.federalreserve.gov/releases/h15/](https://www.federalreserve.gov/releases/h15/)
 
 The values for the API are updated as the federal reserve updates.
 
 ## How to use
 
-From either a browser, or a Rest API client like Postman, goto http://whatdoesthefedsay.com/rate.
+From either a browser, or a Rest API client like Postman, goto [http://whatdoesthefedsay.com/rate](http://whatdoesthefedsay.com/rate).
 
 This will provide a JSON body between 700-800 bytes in size.
 
