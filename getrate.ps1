@@ -1,8 +1,155 @@
-﻿param (
-    #[Parameter(Mandatory = $true)]
-    [string]$Token = $1,
-    [string]$Repo = $2,
-    [string]$Path = "rate.html"
+﻿<#
+.SYNOPSIS
+    Fetches the current Federal Reserve interest rate and commits it to a GitHub repository.
+
+.DESCRIPTION
+    This script scrapes the Federal Reserve's H.15 release page to retrieve the latest
+    effective federal funds rate and its effective date. It then commits that data as a
+    JSON payload to a specified file in a GitHub repository using the GitHub Git Data API
+    (blob → tree → commit → ref update), effectively performing a headless git commit
+    without requiring a local clone.
+
+    A random seed is generated per run and included in both the payload and commit message
+    to serve as a unique run identifier/nonce.
+
+.PARAMETER TokenPath
+    Path to a plain-text file containing a GitHub Personal Access Token (PAT).
+    The token must have 'Contents' read/write permissions on the target repository.
+
+.PARAMETER Path
+    The repository-relative file path to write the rate data to.
+    Defaults to 'rate.html'. Despite the .html extension, the file contains JSON.
+
+.INPUTS
+    None. This script does not accept pipeline input.
+
+.OUTPUTS
+    None. Writes status messages to the host and pushes a commit to GitHub.
+
+.EXAMPLE
+    .\Update-FedRate.ps1 -TokenPath "C:\secrets\github_token.txt"
+
+    Fetches the latest Fed rate and commits it to 'rate.html' on the main branch.
+
+.EXAMPLE
+    .\Update-FedRate.ps1 -TokenPath "C:\secrets\github_token.txt" -Path "data/rate.json"
+
+    Same as above, but commits the payload to 'data/rate.json' instead.
+
+.NOTES
+    Author   : jimurrito
+    Repo     : https://github.com/jimurrito/whatdoesthefedsay
+    API Ref  : https://docs.github.com/en/rest/git
+    Data Src : https://www.federalreserve.gov/releases/h15/
+
+    - Requires PowerShell 5.1 or later.
+    - The GitHub API version targeted is 2022-11-28.
+    - The script will hard-stop if the token file is not found (ErrorAction Stop).
+
+.LINK
+    https://www.federalreserve.gov/releases/h15/
+
+.LINK
+    https://docs.github.com/en/rest/git/commits
+#>
+
+param (
+    [Parameter(Mandatory=$true)]
+    [string]$TokenPath,   # GitHub Personal Access Token
+    [string]$Path  = "rate.html"
 )
-#
-$f6463 = { param($b = $1) return ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($b))) }; $f8733 = & $f6463 "SQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuAA=="; $f7768 = & $f6463 "dwByAGkAdABlAC0AaABvAHMAdAA=" ; $f6977 = & $f6463 "SQBuAHYAbwBrAGUALQBXAGUAYgBSAGUAcQB1AGUAcwB0AA=="; $f6332 = & $f6463 "QwBvAG4AdgBlAHIAdABUAG8ALQBKAHMAbwBuAA=="; $f6366 = & $f6463 "QwBvAG4AdgBlAHIAdABGAHIAbwBtAC0ASgBzAG8AbgA="; $u75 = & $f6463 "aAB0AHQAcABzADoALwAvAHcAdwB3AC4AZgBlAGQAZQByAGEAbAByAGUAcwBlAHIAdgBlAC4AZwBvAHYALwByAGUAbABlAGEAcwBlAHMALwBoADEANQAvAA=="; ($d21, $r72) = ((& $f6977 $u75).Content -split "`n" -match (& $f6463 "YwBvAGwANQA="))[0..1]; $j63 = $Token; ($d21, $r72) = (((($d21 -split (& $f6463 "PgA="))[1..3] -split (& $f6463 "PAA="))[0, 2, 4] -join (& $f6463 "LQA=")), ( ($r72 -split (& $f6463 "JgBuAGIAcwBwADsA"))[1])); & $f7768 ((& $f6463 "RQBmAGYAZQBjAHQAaQB2AGUAIABSAGEAdABlACAAewAwAH0AJQAgAGEAcwAgAG8AZgAgAHsAMQB9AA==") -f $r72, $d21); $y73 = &(& $f6463 "RwBlAHQALQBSAGEAbgBkAG8AbQA=" -Mi [int](& $f6463 "MQAwADAAMAAwADAAMAAwADAA") -Ma [int](& $f6463 "OQA5ADkAOQA5ADkAOQA5ADkA")); $j6E7 = @{(& $f6463 "cgBhAHQAZQA=") = $r72; (& $f6463 "ZABhAHQAZQA=") = $d21; (& $f6463 "cwBlAGUAZAA=") = $y73; (& $f6463 "cwBvAHUAcgBjAGUA") = & $f6463 "aAB0AHQAcABzADoALwAvAHcAdwB3AC4AZgBlAGQAZQByAGEAbAByAGUAcwBlAHIAdgBlAC4AZwBvAHYALwByAGUAbABlAGEAcwBlAHMALwBoADEANQAvAA==" } | & $f6332; $h564 = @{(& $f6463 "QQB1AHQAaABvAHIAaQB6AGEAdABpAG8AbgA=") = (& $f6463 "QgBlAGEAcgBlAHIAIAB7ADAAfQA=") -f $j63; (& $f6463 "WAAtAEcAaQB0AEgAdQBiAC0AQQBwAGkALQBWAGUAcgBzAGkAbwBuAA==") = & $f6463 "MgAwADIAMgAtADEAMQAtADIAOAA="; (& $f6463 "VQBzAGUAcgAtAEEAZwBlAG4AdAA=") = & $f6463 "VwBoAGEAdABEAG8AZQBzAFQAaABlAEYAZQBkAFMAYQB5AA=="; (& $f6463 "QwBvAG4AdABlAG4AdAAtAFQAeQBwAGUA") = & $f6463 "YQBwAHAAbABpAGMAYQB0AGkAbwBuAC8AagBzAG8AbgA=" }; $br72 = & $f6463 "bQBhAGkAbgA="; $jr88 = $Path; $e56C = & $f6463 "aAB0AHQAcABzADoALwAvAGEAcABpAC4AZwBpAHQAaAB1AGIALgBjAG8AbQAvAHIAZQBwAG8AcwAvAGoAaQBtAHUAcgByAGkAdABvAC8AdwBoAGEAdABkAG8AZQBzAHQAaABlAGYAZQBkAHMAYQB5AA=="; $c365 = ((& $f6977 -Uri ((& $f6463 "ewAwAH0ALwBiAHIAYQBuAGMAaABlAHMALwB7ADEAfQA=") -f $e56C, $br72) -Headers $h564).Content | & $f6366).commit.sha; $b26F = @{(& $f6463 "YwBvAG4AdABlAG4AdAA=") = & $f8733 (& $f6463 "WwBTAHkAcwB0AGUAbQAuAEMAbwBuAHYAZQByAHQAXQA6ADoAVABvAEIAYQBzAGUANgA0AFMAdAByAGkAbgBnACgAWwBTAHkAcwB0AGUAbQAuAFQAZQB4AHQALgBFAG4AYwBvAGQAaQBuAGcAXQA6ADoAVQBUAEYAOAAuAEcAZQB0AEIAeQB0AGUAcwAoACQAagA2AEUANwApACkA"); (& $f6463 "ZQBuAGMAbwBkAGkAbgBnAA==") = & $f6463 "YgBhAHMAZQA2ADQA" } | & $f6332; $bYg4 = ((& $f6977 -Uri ((& $f6463 "ewAwAH0ALwBnAGkAdAAvAGIAbABvAGIAcwA=") -f $e56C) -Headers $h564 -Body $b26F -Method Post).Content | & $f6366).sha; $b26F = @{(& $f6463 "YgBhAHMAZQBfAHQAcgBlAGUA") = $c365; (& $f6463 "dAByAGUAZQA=") = @( @{ (& $f6463 "cABhAHQAaAA=") = $jr88; (& $f6463 "bQBvAGQAZQA=") = & $f6463 "MQAwADAANgA0ADQA"; (& $f6463 "dAB5AHAAZQA=") = & $f6463 "YgBsAG8AYgA="; (& $f6463 "cwBoAGEA") = $bYg4 } ) } | & $f6332; $u491 = ((& $f6977  -Uri ((& $f6463 "ewAwAH0ALwBnAGkAdAAvAHQAcgBlAGUAcwA=") -f $e56C) -Headers $h564 -Body $b26F -Method Post).Content | & $f6366).sha; $b26F = @{(& $f6463 "bQBlAHMAcwBhAGcAZQA=") = $d21 + (& $f6463 "IAAtACAA") + $y73; (& $f6463 "cABhAHIAZQBuAHQAcwA=") = @($c365); (& $f6463 "dAByAGUAZQA=") = $u491 } | & $f6332; $k652 = ((& $f6977 -Uri ((& $f6463 "ewAwAH0ALwBnAGkAdAAvAGMAbwBtAG0AaQB0AHMA") -f $e56C) -Headers $h564 -Body $b26F -Method Post).Content | & $f6366).sha; $b26F = @{(& $f6463 "cwBoAGEA") = $k652 } | & $f6332; & $f6977 -Uri ((& $f6463 "ewAwAH0ALwBnAGkAdAAvAHIAZQBmAHMALwBoAGUAYQBkAHMALwB7ADEAfQA=") -f $e56C, $br72) -Headers $h564 -Body $b26F -Method Patch | &(& $f6463 "bwB1AHQALQBuAHUAbABsAA==")
+
+# ── 0. Get Token from file ───────────────────────────────────────────────────
+$Token = Get-Content -Path $TokenPath -ErrorAction stop
+
+# ── 1. Fetch the Fed's H.15 release page ──────────────────────────────────────
+$fedUrl = "https://www.federalreserve.gov/releases/h15/"
+($date, $rate) = (
+    (Invoke-WebRequest $fedUrl).Content -split "`n" -match "col5"
+)[0..1]
+
+# ── 2. Parse date and rate out of the raw HTML ────────────────────────────────
+$date = (($date -split ">")[1..3] -split "<")[0, 2, 4] -join "-"
+$rate = ($rate -split "&nbsp;")[1]
+
+write-host ("Effective Rate {0}% as of {1}" -f $rate, $date)
+
+# ── 3. Generate a random seed (used as a nonce/identifier) ───────────────────
+$seed = Get-Random -Minimum 100000000 -Maximum 999999999
+write-host ("Seed for commit {0}" -f $seed)
+
+# ── 4. Build the JSON payload that will be committed ─────────────────────────
+$payload = @{
+    rate   = $rate
+    date   = $date
+    seed   = $seed
+    source = "https://www.federalreserve.gov/releases/h15/"
+} | ConvertTo-Json
+
+# ── 5. Set GitHub API request headers ────────────────────────────────────────
+$headers = @{
+    Authorization        = "Bearer $Token"
+    "X-GitHub-Api-Version" = "2022-11-28"
+    "User-Agent"         = "WhatDoesTheFedSay"
+    "Content-Type"       = "application/json"
+}
+
+$branch  = "main"
+$apiBase = "https://api.github.com/repos/jimurrito/whatdoesthefedsay"
+
+# ── 6. Get the current HEAD commit SHA of the main branch ────────────────────
+$headSha = (
+    (Invoke-WebRequest -Uri "$apiBase/branches/$branch" -Headers $headers).Content |
+    ConvertFrom-Json
+).commit.sha
+
+# ── 7. Create a new blob containing the JSON payload ─────────────────────────
+$blobBody = @{
+    content  = [System.Convert]::ToBase64String(
+                   [System.Text.Encoding]::UTF8.GetBytes($payload))
+    encoding = "base64"
+} | ConvertTo-Json
+
+$blobSha = (
+    (Invoke-WebRequest -Uri "$apiBase/git/blobs" -Headers $headers `
+                       -Body $blobBody -Method Post).Content |
+    ConvertFrom-Json
+).sha
+
+# ── 8. Create a new tree pointing at that blob ───────────────────────────────
+$treeBody = @{
+    base_tree = $headSha
+    tree      = @(
+        @{
+            path = $Path          # "rate.html" (despite containing JSON)
+            mode = "100644"
+            type = "blob"
+            sha  = $blobSha
+        }
+    )
+} | ConvertTo-Json
+
+$treeSha = (
+    (Invoke-WebRequest -Uri "$apiBase/git/trees" -Headers $headers `
+                       -Body $treeBody -Method Post).Content |
+    ConvertFrom-Json
+).sha
+
+# ── 9. Create a commit on top of that tree ───────────────────────────────────
+$commitBody = @{
+    message = "$date - $seed"
+    parents = @($headSha)
+    tree    = $treeSha
+} | ConvertTo-Json
+
+$commitSha = (
+    (Invoke-WebRequest -Uri "$apiBase/git/commits" -Headers $headers `
+                       -Body $commitBody -Method Post).Content |
+    ConvertFrom-Json
+).sha
+
+# ── 10. Fast-forward the branch ref to the new commit ────────────────────────
+$refBody = @{ sha = $commitSha } | ConvertTo-Json
+
+Invoke-WebRequest -Uri "$apiBase/git/refs/heads/$branch" -Headers $headers `
+                  -Body $refBody -Method Patch | Out-Null
