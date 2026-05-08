@@ -7,21 +7,33 @@
     interval = "0 5-17 * * 1-5";
     keyPath = config.age.secrets.wdtfs_key.path;
   };
-
 */
 {
   description = "(W)hat(D)oes(T)he(F)ed(S)ay script and service";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    test-vm.url = "github:jimurrito/nixos-test-vm";
   };
   #
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      test-vm,
+    }:
     let
+      # Inject powershell.config.json into $PSHOME
+      # Without this, powershell is verbose log a bunch of random crap when used in a systemd service.
+      quietPowershell = pkgs.powershell.overrideAttrs (old: {
+        postInstall = (old.postInstall or "") + ''
+          echo '{"LogLevel":"Critical"}' > $out/share/powershell/powershell.config.json
+        '';
+      });
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
       lib = nixpkgs.lib;
     in
+    with lib;
     {
       packages.${system}.default = pkgs.stdenv.mkDerivation {
         pname = "wdtfs";
@@ -37,12 +49,11 @@
           mkdir -p "$out/bin"
           cat > "$out/bin/wdtfs" << EOF
           #!/usr/bin/env bash
-          ${lib.getExe pkgs.powershell} -NonInteractive -Command "$moduleDir/getrate.ps1 \$@"
+          ${getExe quietPowershell} -NonInteractive -Command "$moduleDir/getrate.ps1 \$@"
           EOF
           chmod +x "$out/bin/wdtfs"
         '';
       };
-
       #
       #
       nixosModules.default =
@@ -80,8 +91,6 @@
               mainpackage
             ];
             # rootless identity
-            # Requires home dir as this needs an interactive shell
-            # If we can port `ionmod` module to a derivation, this can go back to `isSystemUser = true;`
             users = {
               groups.wdtfs = { };
               users.wdtfs = {
@@ -97,8 +106,8 @@
                 enable = true;
                 description = "(W)hat(D)oes(T)he(F)ed(S)ay service";
                 restartIfChanged = true;
-                path = with pkgs; [
-                  powershell
+                path = [
+                  quietPowershell
                 ];
                 serviceConfig = with lib; {
                   Type = "oneshot";
@@ -120,5 +129,34 @@
             };
           };
         };
+      #
+      #
+      #
+      # TestVM
+      nixosConfigurations =
+        let
+          testConfig =
+            { ... }:
+            {
+              services.wdtfs = {
+                enable = true;
+                interval = "daily";
+                keyPath = "/etc/wdtfs-key";
+              };
+            };
+        in
+        {
+          test-vm = nixpkgs.lib.nixosSystem {
+            system = "x86_64-linux";
+            modules = [
+              test-vm.baselineConfig
+              # test config
+              self.nixosModules.default
+              testConfig
+            ];
+          };
+        };
+
+      #
     };
 }
