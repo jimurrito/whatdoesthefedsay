@@ -59,6 +59,9 @@ param (
     [string]$Path  = "rate.html"
 )
 
+# Kills script if a func fails
+$ErrorActionPreference = "Stop"
+
 # ── 0. Get Token from file ───────────────────────────────────────────────────
 $Token = Get-Content -Path $TokenPath -ErrorAction stop
 

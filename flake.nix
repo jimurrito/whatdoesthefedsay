@@ -11,8 +11,16 @@
 {
   description = "(W)hat(D)oes(T)he(F)ed(S)ay script and service";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    test-vm.url = "github:jimurrito/nixos-test-vm";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+    test-vm = {
+      url = "github:jimurrito/nixos-test-vm";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    # can not use espresso as it will cause a recursive error for users who use this app via espresso
+    qpwsh = {
+      url = "git+https://forgejo.immerhouse.com/jimurrito/quiet-powershell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
   #
   outputs =
@@ -20,42 +28,62 @@
       self,
       nixpkgs,
       test-vm,
+      qpwsh,
     }:
     let
-      # Inject powershell.config.json into $PSHOME
-      # Without this, powershell is verbose log a bunch of random crap when used in a systemd service.
-      quietPowershell = pkgs.powershell.overrideAttrs (old: {
-        postInstall = (old.postInstall or "") + ''
-          echo '{"LogLevel":"Critical"}' > $out/share/powershell/powershell.config.json
-        '';
-      });
-      system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
+      #
       lib = nixpkgs.lib;
+      # Supported Architectures
+      archs = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      # multi arch packager
+      packager = sys: {
+        ${sys}.default =
+          let
+            pkgs = import nixpkgs {
+              system = sys;
+              overlays = [ qpwsh.overlays.default ];
+            };
+          in
+          with lib;
+          pkgs.stdenv.mkDerivation {
+            pname = "wdtfs";
+            meta.mainProgram = "wdtfs";
+            version = "0.1.0";
+            src = ./.;
+            dontBuild = true;
+            #
+            installPhase = ''
+              moduleDir="$out/module"
+              mkdir -p "$moduleDir"
+              cp getrate.ps1 "$moduleDir/"
+              mkdir -p "$out/bin"
+              cat > "$out/bin/wdtfs" << EOF
+              #!/usr/bin/env bash
+              ${getExe pkgs.quietPowershell} -NonInteractive -NoLogo -NoProfile -Command "$moduleDir/getrate.ps1 \$@"
+              EOF
+              chmod +x "$out/bin/wdtfs"
+            '';
+          };
+      };
+      #
     in
     with lib;
     {
-      packages.${system}.default = pkgs.stdenv.mkDerivation {
-        pname = "wdtfs";
-        meta.mainProgram = "wdtfs";
-        version = "0.1.0";
-        src = ./.;
-        dontBuild = true;
-        #
-        installPhase = ''
-          moduleDir="$out/module"
-          mkdir -p "$moduleDir"
-          cp getrate.ps1 "$moduleDir/"
-          mkdir -p "$out/bin"
-          cat > "$out/bin/wdtfs" << EOF
-          #!/usr/bin/env bash
-          ${getExe quietPowershell} -NonInteractive -Command "$moduleDir/getrate.ps1 \$@"
-          EOF
-          chmod +x "$out/bin/wdtfs"
-        '';
+      #
+      # Builds packages for each arch provided
+      # (') is required so foldl will be strict and not lazy
+      packages = builtins.foldl' (acc: x: acc // x) { } (map packager archs);
+      #
+      # Nixpkgs overlay for the package(s)
+      overlays.default = final: prev: {
+        wdtfs = self.packages.${final.system}.default;
       };
       #
-      #
+      # Default option to import package into the env
+      # and import service options
       nixosModules.default =
         {
           config,
@@ -64,8 +92,6 @@
           ...
         }:
         let
-          pkgsystem = pkgs.stdenv.hostPlatform.system;
-          mainpackage = self.packages.${pkgsystem}.default;
           wdtfs-nixops = config.services.wdtfs;
         in
         {
@@ -86,10 +112,8 @@
           #
           # config to be implemented via the `options`
           config = lib.mkIf wdtfs-nixops.enable {
-            # Imports package and runs the install steps
-            environment.systemPackages = [
-              mainpackage
-            ];
+            # Imports the overlay to put sonarr-cleanup in pkgs
+            nixpkgs.overlays = [ self.overlays.default ];
             # rootless identity
             users = {
               groups.wdtfs = { };
@@ -106,15 +130,12 @@
                 enable = true;
                 description = "(W)hat(D)oes(T)he(F)ed(S)ay service";
                 restartIfChanged = true;
-                path = [
-                  quietPowershell
-                ];
                 serviceConfig = with lib; {
                   Type = "oneshot";
                   User = "wdtfs";
                   Group = "wdtfs";
                   ExecStart = ''
-                    ${getExe mainpackage} -TokenPath ${wdtfs-nixops.keyPath}
+                    ${getExe pkgs.wdtfs} -TokenPath ${wdtfs-nixops.keyPath}
                   '';
                 };
               };
